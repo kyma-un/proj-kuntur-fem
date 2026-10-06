@@ -15,6 +15,17 @@ using LinearAlgebra
 # @project: Kuntur
 #
 #
+model = GmshDiscreteModel("gmsh/torus_coil.msh")
+
+order = 1
+reffe = ReferenceFE(nedelec, Float64, order)
+V = TestFESpace(model, reffe; conformity = :HCurl, dirichlet_tags = ["boundary"])
+U = TrialFESpace(V, VectorValue(0.0, 0.0, 0.0))
+
+Ω  = Triangulation(model)
+dΩ = Measure(Ω, 2*order + 1)
+println("Celdas: ", num_cells(Ω), " | DOFs libres: ", num_free_dofs(V))
+
 # --- Parámetros físicos -------------------------------------
 
 const μ₀ = 4π * 1e-7
