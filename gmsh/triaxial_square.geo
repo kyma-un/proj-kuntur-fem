@@ -27,20 +27,27 @@ dz = kopt * Lz;
 // --- Dominio de aire (esfera) ------------------------------------
 // "Alcance" característico = medio lado de la bobina más grande
 Rext  = Lz / 2;
-R_dom = 3.0 * Rext;
+R_dom = 5.0 * Rext;
 
 // --- Ancho físico del hilo/fuente (debe coincidir con σ_frac en Julia) --
-// Proporcional a L (no un valor absoluto fijo): mantiene la resolución
-// relativa constante si luego barres distintos L. El valor L/40 (25mm
-// para L=1m) se escogió por robustez de malla, no por un gauge de
-// alambre real: valores más finos (p.ej. L/100) generan una malla con
-// calidad promedio muy pobre (<0.05) porque el dominio de aire es
-// ~1.7 m de radio y el salto de tamaño resulta demasiado brusco para
-// que Delaunay lo gradúe bien (ver dist_min/dist_max más abajo).
-sigma_src = L / 40;
+// Proporcional a L. IMPORTANTE: con sigma_src=L/40 y lc_coil=sigma_src
+// (solo 1 elemento por ancho de fuente), la malla resolvía muy mal el
+// gaussiano -> error de validación de 37-71% contra la fórmula teórica.
+// Subir la resolución relativa (lc_coil=sigma/3) con sigma_src chico
+// disparaba slivers de Delaunay (líneas rectas muy próximas entre las
+// 3 bobinas anidadas). La solución que funcionó: agrandar sigma_src
+// (hilo "más grueso", L/10 en vez de L/40) MANTENIENDO lc_coil=sigma/3.
+// Con un sigma más grande en términos absolutos, el salto de tamaño
+// hasta lc_far es menos brusco, y Delaunay gradúa mejor: la calidad
+// promedio mejoró de 0.28 a 0.38 y además bajó el número de elementos.
+// Contrapartida: el hilo idealizado queda algo más "gordo" (sigma/L=0.1
+// vs ~0.06 del caso circular), lo que se aleja un poco más del filamento
+// de ancho cero que asume la fórmula teórica (ecuación 8) — una fuente
+// de error residual a vigilar, pero mucho menor que la anterior.
+sigma_src = L / 10;
 
 lc_coil_L     = L / 20;
-lc_coil_sigma = sigma_src;
+lc_coil_sigma = sigma_src / 3;
 If (lc_coil_L < lc_coil_sigma)
   lc_coil = lc_coil_L;
 Else
@@ -124,8 +131,8 @@ Field[1].Sampling   = 150;
 // Zona de transición atada a sigma_src (que ya escala con L): da
 // una banda fina alrededor del hilo y deja que el resto del campo
 // (Threshold hasta lc_far) gradúe el tamaño en el resto del dominio.
-dist_min = 1.5 * sigma_src;
-dist_max = 5   * sigma_src;
+dist_min = 2 * sigma_src;
+dist_max = 6 * sigma_src;
 
 Field[2] = Threshold;
 Field[2].InField  = 1;
@@ -138,7 +145,7 @@ Field[2].DistMax  = dist_max;
 Field[3] = Ball;
 Field[3].Radius    = Rext / 2;
 Field[3].Thickness = Rext / 4;
-Field[3].VIn  = Rext / 15;
+Field[3].VIn  = Rext / 25;
 Field[3].VOut = lc_far;
 Field[3].XCenter = 0; Field[3].YCenter = 0; Field[3].ZCenter = 0;
 

@@ -140,7 +140,7 @@ valor usado en el .geo para que la malla resuelva bien la fuente.
 function run_helmholtz_square(L::Float64;
         Ix::Float64 = 1.0, Iy::Float64 = 1.0, Iz::Float64 = 1.0,
         Nx::Float64 = 1.0, Ny::Float64 = 1.0, Nz::Float64 = 1.0,
-        σ_frac::Float64 = 40.0,
+        σ_frac::Float64 = 10.0,   # DEBE coincidir con sigma_src=L/10 del .geo actualizado
         geo_path::String = GEO_PATH, meshdir::String = MESH_DIR, outdir::String = OUT_DIR)
 
     mkpath(meshdir); mkpath(outdir)
@@ -158,7 +158,10 @@ function run_helmholtz_square(L::Float64;
     U = TrialFESpace(V, VectorValue(0.0, 0.0, 0.0))
 
     Ω  = Triangulation(model)
-    dΩ = Measure(Ω, 2*order + 1)
+    # Cuadratura más fina que el mínimo (2*order+1=3) para integrar mejor
+    # la fuente gaussiana dentro de cada elemento; el sistema es chico
+    # (miles de DOFs), así que esto es prácticamente gratis en costo.
+    dΩ = Measure(Ω, 8)
     println("L = $L m | Celdas: ", num_cells(Ω), " | DOFs libres: ", num_free_dofs(V))
 
     # --- (b) Geometría de cada par (debe coincidir con el .geo) --
@@ -193,19 +196,42 @@ function run_helmholtz_square(L::Float64;
     println("  Sistema: $(size(A,1)) DOFs, $(nnz(A)) no-ceros ",
             "(~$(round(nnz(A)*12/1e6, digits=1)) MB en CSC)")
 
-    # --- Solver iterativo (CG + AMG) ------------------------------
-    println("Construyendo precondicionador AMG...")
-    ml = ruge_stuben(A)
-    Pl = aspreconditioner(ml)
+    # --- Elegir solver según el tamaño del sistema -----------------
+    # CG+AMG tiene sentido cuando un solver directo agotaría la RAM
+    # (como el caso circular, con ~400-500k DOFs). Para esta malla
+    # cuadrada, con solo ~10-20k DOFs, un solver directo es trivial
+    # en memoria y, a diferencia de CG+AMG, NO depende de qué tan mal
+    # condicionada esté la matriz localmente. Eso importa aquí porque
+    # el .geo de bobinas cuadradas prioriza robustez de malla sobre
+    # calidad (hay ~7% de tetraedros con calidad <0.05 cerca de las
+    # bobinas), lo cual hace que un precondicionador AMG (pensado para
+    # matrices tipo difusión, no para curl-curl con elementos
+    # deformes) se quede sin converger en pocas iteraciones.
+    DIRECT_SOLVE_MAX_DOFS = 150_000
 
-    println("Resolviendo con CG (AMG precond.)...")
-    x, hist = IterativeSolvers.cg(A, b; Pl=Pl, reltol=1e-8,
-                                   maxiter=2000, log=true, verbose=true)
-    println("  CG: convergió=$(hist.isconverged) en $(hist.iters) iteraciones")
+    cg_iters = 0
+    cg_converged = true   # true por defecto: el directo no "converge", solo resuelve
 
-    if !hist.isconverged
-        error("El solver NO convergió: los resultados de este L no son válidos. " *
-              "Sube maxiter, relaja reltol, o revisa la calidad de la malla.")
+    if size(A,1) <= DIRECT_SOLVE_MAX_DOFS
+        println("Resolviendo con solver directo (sistema pequeño: $(size(A,1)) DOFs)...")
+        x = A \ b
+        println("✓ Resuelto (directo)")
+    else
+        println("Construyendo precondicionador AMG (sistema grande: $(size(A,1)) DOFs)...")
+        ml = ruge_stuben(A)
+        Pl = aspreconditioner(ml)
+
+        println("Resolviendo con CG (AMG precond.)...")
+        x, hist = IterativeSolvers.cg(A, b; Pl=Pl, reltol=1e-8,
+                                       maxiter=2000, log=true, verbose=true)
+        println("  CG: convergió=$(hist.isconverged) en $(hist.iters) iteraciones")
+        cg_iters = hist.iters
+        cg_converged = hist.isconverged
+
+        if !hist.isconverged
+            error("El solver NO convergió: los resultados de este L no son válidos. " *
+                  "Sube maxiter, relaja reltol, o revisa la calidad de la malla.")
+        end
     end
 
     Ah = FEFunction(U, x)
@@ -220,8 +246,31 @@ function run_helmholtz_square(L::Float64;
     W = 0.5 * sum(∫( Bh⋅Hh )dΩ)
 
     # --- Validación: B simulado en el centro vs. teórico (ec. 8) --
+    # El punto EXACTO (0,0,0) cae justo sobre una cara/arista compartida
+    # entre celdas (es el centro de simetría del dominio), y el buscador
+    # de celdas de Gridap puede no "encontrarlo" por quedar justo en el
+    # borde -> AssertionError. Se prueba el punto exacto y, si falla, se
+    # perturba levemente (nunca se deja de exportar el .vtu por esto).
+    function safe_eval(field, basept::Point, L::Float64)
+        try
+            return field(basept)
+        catch e
+            e isa AssertionError || rethrow(e)
+            ϵ = 1e-6 * L
+            for (dx_,dy_,dz_) in ((ϵ,ϵ,ϵ), (ϵ,0.0,0.0), (0.0,ϵ,0.0), (0.0,0.0,ϵ), (-ϵ,-ϵ,-ϵ))
+                try
+                    return field(Point(dx_,dy_,dz_))
+                catch e2
+                    e2 isa AssertionError || rethrow(e2)
+                end
+            end
+            @warn "No se pudo evaluar el campo cerca del centro (todas las perturbaciones fallaron)"
+            return VectorValue(NaN, NaN, NaN)
+        end
+    end
+
     pt = Point(0.0, 0.0, 0.0)
-    Bsim = Bh(pt)
+    Bsim = safe_eval(Bh, pt, L)
 
     Bc_x = B_theo_square(0.0, Lx, 2*dx, Nx, Ix)
     Bc_y = B_theo_square(0.0, Ly, 2*dy, Ny, Iy)
@@ -245,6 +294,10 @@ function run_helmholtz_square(L::Float64;
         @warn "Error > 15% en L=$L: sospecha de malla insuficiente cerca de las bobinas"
     end
 
+    # El .vtu se exporta SIEMPRE que el solve haya terminado (ya pasamos
+    # ese punto), independientemente de cómo haya salido la validación
+    # de arriba, para poder inspeccionar el resultado en ParaView aunque
+    # la comparación numérica en el centro falle por algún motivo.
     writevtk(Ω, joinpath(outdir, "magnetostatic_square_$tag"),
         cellfields = ["A"=>Ah, "B"=>Bh, "H"=>Hh, "normB"=>Bmag, "J"=>J_cf])
     println("✓ Exportado $(joinpath(outdir, "magnetostatic_square_$tag.vtu"))")
@@ -253,7 +306,7 @@ function run_helmholtz_square(L::Float64;
             Bc_x=Bc_x, Bc_y=Bc_y, Bc_z=Bc_z,
             Bsim_x=Bsim[1], Bsim_y=Bsim[2], Bsim_z=Bsim[3],
             err_x=err_x, err_y=err_y, err_z=err_z,
-            cg_iters=hist.iters, cg_converged=hist.isconverged)
+            cg_iters=cg_iters, cg_converged=cg_converged)
 end
 
 # ============================================================
