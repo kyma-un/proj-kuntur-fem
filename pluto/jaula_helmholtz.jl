@@ -119,7 +119,7 @@ Campo de la órbita a simular (µT): $(@bind B_orbita Slider(10:1:65, default = 
 
 Ángulo ``\theta`` entre ambos campos (°): $(@bind θ_deg Slider(0:5:180, default = 120, show_value = true))
 
-Factor de seguridad: $(@bind FS Slider(1:0.1:3, default = 2, show_value = true))
+Factor de seguridad: $(@bind FS Slider(1:0.1:3, default = 1.2, show_value = true))
 """
 
 # ╔═╡ 79557bf3-5dc6-4a08-b56c-fedbff16e618
