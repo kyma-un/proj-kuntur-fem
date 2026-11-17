@@ -111,16 +111,22 @@ const ncells = length(Bx)
 const pins = (1, ncells)
 
 times = collect(range(t0, tf; length = n_frames))
-Bscale = 0.0
-Ipeak = 0.0
-for t in times
-    Ix, Iy, Iz = currents(t)
-    Ipeak = max(Ipeak, abs(Ix), abs(Iy), abs(Iz))
-    for i in 1:ncells
-        b = Ix*Bx[i] + Iy*By[i] + Iz*Bz[i]
-        Bscale = max(Bscale, sqrt(max(b⋅b, 0.0)))
+
+function series_scale(times, Bx, By, Bz)
+    Bscale = 0.0
+    Ipeak = 0.0
+    for t in times
+        Ix, Iy, Iz = currents(t)
+        Ipeak = max(Ipeak, abs(Ix), abs(Iy), abs(Iz))
+        for i in eachindex(Bx)
+            b = Ix*Bx[i] + Iy*By[i] + Iz*Bz[i]
+            Bscale = max(Bscale, sqrt(max(b⋅b, 0.0)))
+        end
     end
+    return Bscale, Ipeak
 end
+
+Bscale, Ipeak = series_scale(times, Bx, By, Bz)
 Bscale > 0 || error("campo nulo: no se puede normalizar")
 println("Escala VTK: max|B| = $(round(Bscale*1e6, sigdigits=4)) µT | I pico = $(round(Ipeak, sigdigits=4)) A")
 

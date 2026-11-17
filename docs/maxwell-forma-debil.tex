@@ -1,0 +1,305 @@
+\documentclass[11pt]{article}
+
+\usepackage[spanish]{babel}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[margin=2.05cm]{geometry}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage{amsmath,amssymb,mathtools}
+\usepackage{enumitem}
+\usepackage{booktabs}
+\usepackage{xcolor}
+\usepackage[hidelinks]{hyperref}
+
+\definecolor{ink}{HTML}{1C2833}
+\definecolor{rule}{HTML}{1F4E79}
+\definecolor{boxbg}{HTML}{F4F7FA}
+\definecolor{resultbg}{HTML}{EAF2F8}
+
+\pagestyle{plain}
+\setlength{\parskip}{0.45em}
+\setlength{\parindent}{0pt}
+\setlist[enumerate]{leftmargin=1.35em,itemsep=0.28em,topsep=0.3em}
+\setlist[itemize]{leftmargin=1.15em,itemsep=0.22em,topsep=0.25em}
+
+\newcommand{\curl}{\nabla\times}
+\newcommand{\nv}{\nu}
+\newcommand{\eg}{\varepsilon_{g}}
+\newcommand{\bd}{\partial\Omega}
+\newcommand{\dV}{\,\mathrm{d}\Omega}
+\newcommand{\dS}{\,\mathrm{d}S}
+
+\newcommand{\eqbox}[2]{%
+  \par\smallskip
+  \noindent\colorbox{resultbg}{%
+    \begin{minipage}{\dimexpr\linewidth-2\fboxsep\relax}
+      \vspace{0.2em}
+      \[ #1 \tag{#2} \]
+      \vspace{-0.45em}
+    \end{minipage}}%
+  \par\smallskip
+}
+
+\begin{document}
+
+\begin{center}
+{\Large\bfseries De Maxwell a la forma débil}\\[0.35em]
+{\large Magnetostática y dinámica del banco de Kuntur}\\[0.55em]
+{\small El camino que llega a \texttt{a(u,v)} y \texttt{l(v)}.
+La \(\varepsilon\) del código no es la permitividad.}
+\end{center}
+
+\vspace{0.2em}
+\noindent\textcolor{rule}{\rule{\linewidth}{0.6pt}}
+
+\section*{1. Maxwell, y el corte que hace este problema}
+
+En un medio lineal,
+\begin{align}
+\curl\mathbf{E} &= -\frac{\partial\mathbf{B}}{\partial t}, &
+\curl\mathbf{H} &= \mathbf{J} + \frac{\partial\mathbf{D}}{\partial t}, \label{eq:maxwell}\\
+\nabla\cdot\mathbf{B} &= 0, &
+\nabla\cdot\mathbf{D} &= \rho, \nonumber
+\end{align}
+con \(\mathbf{B}=\mu\mathbf{H}\), \(\mathbf{D}=\varepsilon_0\mathbf{E}\) y
+\(\mathbf{J}=\mathbf{J}_{s}+\sigma\mathbf{E}\).
+La corriente \(\mathbf{J}_{s}\) es la que imponemos en la bobina.
+La corriente \(\sigma\mathbf{E}\) es la que el campo induce en un conductor.
+
+Kuntur modela aire, sin conductores en la malla, a frecuencias de hertz y en un dominio de decímetros. En ese régimen se apagan dos términos:
+
+\begin{itemize}
+  \item la corriente de desplazamiento \(\partial\mathbf{D}/\partial t\), porque el banco es diminuto frente a la longitud de onda (\(c/f\sim 3\times 10^{8}\,\mathrm{m}\) a \(1\,\mathrm{Hz}\));
+  \item la corriente inducida \(\sigma\mathbf{E}\), porque en el aire \(\sigma=0\).
+\end{itemize}
+
+Lo que queda de \eqref{eq:maxwell} es la magnetostática
+\begin{equation}
+\curl\mathbf{H}=\mathbf{J}_{s},
+\qquad
+\nabla\cdot\mathbf{B}=0,
+\qquad
+\mathbf{H}=\nv\mathbf{B},
+\qquad
+\nv=\frac{1}{\mu_0}.
+\label{eq:magnetostatica}
+\end{equation}
+El tiempo puede seguir estando en \(\mathbf{J}_{s}\). Si el operador no depende de \(t\), el campo lo sigue al instante. Esa es la dinámica que corre hoy el código.
+
+\section*{2. Potencial y forma fuerte}
+
+De \(\nabla\cdot\mathbf{B}=0\) existe un potencial vectorial tal que
+\begin{equation}
+\mathbf{B}=\curl\mathbf{A}.
+\label{eq:B}
+\end{equation}
+Sustituir \eqref{eq:B} en \eqref{eq:magnetostatica} da la forma fuerte
+\begin{equation}
+\curl\bigl(\nv\,\curl\mathbf{A}\bigr)=\mathbf{J}_{s}
+\quad\text{en }\Omega.
+\label{eq:fuerte-singular}
+\end{equation}
+
+Esta ecuación no fija \(\mathbf{A}\). Si \(\mathbf{A}\) es solución, también lo es \(\mathbf{A}+\nabla\psi\), porque \(\curl\nabla\psi=\mathbf{0}\). El operador \(\curl\nv\curl\) tiene núcleo: los gradientes. La matriz de elementos finitos, sin un término extra, es singular.
+
+El código corta ese núcleo con una penalización pequeña,
+\begin{equation}
+\boxed{\;
+\curl\bigl(\nv\,\curl\mathbf{A}\bigr)+\eg\mathbf{A}=\mathbf{J}_{s}
+\;}
+\label{eq:fuerte}
+\end{equation}
+y en la frontera del aire
+\begin{equation}
+\mathbf{n}\times\mathbf{A}=\mathbf{0}
+\quad\text{sobre }\bd.
+\label{eq:bc}
+\end{equation}
+En el código, \(\eg\) es la constante \(\varepsilon=\nv\times 10^{-6}\). No es \(\varepsilon_0\). No impone \(\nabla\cdot\mathbf{A}=0\) de forma exacta: hace única la solución y empuja la parte de gradiente hacia cero. Si \(\eg\) es demasiado chica, \(K\) queda casi singular. Si es demasiado grande, contamina \(\mathbf{B}=\curl\mathbf{A}\).
+
+\(\nv\) va dentro del rotacional, no fuera. En aire es constante y da igual; escrito así, la misma forma débil sirve el día que \(\nv\) cambie de un material a otro.
+
+\section*{3. El paso a la forma débil}
+
+El espacio donde vive la formulación es
+\[
+V=\bigl\{\mathbf{v}\in H(\mathrm{curl},\Omega):\ \mathbf{n}\times\mathbf{v}=\mathbf{0}\text{ en }\bd\bigr\},
+\]
+con \(H(\mathrm{curl})=\{\mathbf{v}\in L^{2}:\curl\mathbf{v}\in L^{2}\}\).
+Ahí \(\curl\mathbf{v}\) existe en \(L^{2}\); no hace falta que \(\mathbf{v}\) tenga segunda derivada. Nédélec de orden 1 es un subespacio conforme de \(V\): la continuidad que impone es la tangencial, que es la que el rotacional necesita.
+
+Se multiplica \eqref{eq:fuerte} por \(\mathbf{v}\in V\) y se integra:
+\begin{equation}
+\int_{\Omega}\mathbf{v}\cdot\curl(\nv\,\curl\mathbf{A})\dV
++\int_{\Omega}\eg\,\mathbf{v}\cdot\mathbf{A}\dV
+=\int_{\Omega}\mathbf{v}\cdot\mathbf{J}_{s}\dV.
+\label{eq:residual}
+\end{equation}
+
+La identidad que baja el rotacional, con \(\mathbf{w}=\nv\,\curl\mathbf{A}\), sale de
+\(\nabla\cdot(\mathbf{v}\times\mathbf{w})=\mathbf{w}\cdot(\curl\mathbf{v})-\mathbf{v}\cdot(\curl\mathbf{w})\):
+\begin{equation}
+\int_{\Omega}\mathbf{v}\cdot(\curl\mathbf{w})\dV
+=\int_{\Omega}(\curl\mathbf{v})\cdot\mathbf{w}\dV
+-\int_{\bd}(\mathbf{v}\times\mathbf{w})\cdot\mathbf{n}\dS.
+\label{eq:partes}
+\end{equation}
+El borde se anula porque \(\mathbf{n}\times\mathbf{v}=\mathbf{0}\). El integrando cumple
+\[
+(\mathbf{v}\times\mathbf{w})\cdot\mathbf{n}=(\mathbf{n}\times\mathbf{v})\cdot\mathbf{w}=0.
+\]
+\(\mathbf{v}\times\mathbf{w}\) no tiene por qué ser cero: queda tangente a \(\bd\), y lo que entra en la integral es su componente normal. No hay integral de frontera que ensamblar. La condición \eqref{eq:bc} ya está metida en el espacio, que es el \texttt{dirichlet\_tags = ["boundary"]} de Nédélec.
+
+Sustituir \(\mathbf{w}=\nv\,\curl\mathbf{A}\) en \eqref{eq:residual} deja la forma débil. Hallar \(\mathbf{A}\in V\) tal que, para todo \(\mathbf{v}\in V\),
+\eqbox{
+\int_{\Omega}\nv\,(\curl\mathbf{A})\cdot(\curl\mathbf{v})\dV
++\int_{\Omega}\eg\,\mathbf{A}\cdot\mathbf{v}\dV
+=\int_{\Omega}\mathbf{v}\cdot\mathbf{J}_{s}\dV.
+}{\(*\)}
+Eso es, línea por línea, lo que declaran los tres planteamientos
+(\texttt{helmholtz.jl}, \texttt{ring.jl}, \texttt{triaxial.jl}):
+\begin{equation*}
+\begin{aligned}
+a(u,v)&=\int\bigl(\nv\,(\nabla\times u)\cdot(\nabla\times v)+\varepsilon\,(u\cdot v)\bigr)\,\mathrm{d}\Omega,\\
+l(v)&=\int v\cdot J\,\mathrm{d}\Omega.
+\end{aligned}
+\end{equation*}
+El primer término es la energía magnética. El segundo es el gauge. El lado derecho es el trabajo de la corriente impuesta.
+
+\(a(u,v)=a(v,u)\): la matriz es simétrica. Con \(\eg>0\) es definida positiva. Sin \(\eg\) solo es semidefinida, y el núcleo discreto (gradientes de Nédélec) deja el sistema sin solución única.
+
+\section*{4. Estática: un sistema lineal}
+
+La corriente no depende del tiempo. \(\mathbf{J}_{s}\) es el par de anillos (o los tres pares) a \(I_{0}\) amperes, con la gaussiana azimutal normalizada para que la integral en la sección valga esa corriente.
+
+Nédélec escribe \(\mathbf{A}_{h}=\sum_{j} a_{j}\boldsymbol{\varphi}_{j}\).
+Probar contra cada \(\boldsymbol{\varphi}_{i}\) convierte \((\ast)\) en
+\begin{equation}
+Ka=f,
+\label{eq:sistema}
+\end{equation}
+\begin{align}
+K_{ij}
+&=a(\boldsymbol{\varphi}_{j},\boldsymbol{\varphi}_{i})
+=\int_{\Omega}\nv\,(\curl\boldsymbol{\varphi}_{j})\cdot(\curl\boldsymbol{\varphi}_{i})\dV
++\int_{\Omega}\eg\,\boldsymbol{\varphi}_{j}\cdot\boldsymbol{\varphi}_{i}\dV,
+\label{eq:K}\\
+f_{i}
+&=l(\boldsymbol{\varphi}_{i})
+=\int_{\Omega}\boldsymbol{\varphi}_{i}\cdot\mathbf{J}_{s}\dV.
+\label{eq:f}
+\end{align}
+\texttt{AffineFEOperator(a, l, U, V)} ensambla \eqref{eq:sistema} y lo resuelve una vez. Del coeficiente se recupera el campo; el rotacional es la derivada que el espacio ya sabe calcular:
+\begin{equation}
+\mathbf{B}_{h}=\curl\mathbf{A}_{h},
+\qquad
+\mathbf{H}_{h}=\frac{1}{\mu_{0}}\mathbf{B}_{h}=\nv\mathbf{B}_{h}.
+\label{eq:BH}
+\end{equation}
+La energía que imprime el programa es la del término de rigidez, sin el gauge:
+\begin{equation}
+W=\frac12\int_{\Omega}\mathbf{B}_{h}\cdot\mathbf{H}_{h}\dV.
+\label{eq:energia}
+\end{equation}
+Nada de esto se vuelve a factorizar si \(I_{0}\) cambia: como \(f\) es lineal en la corriente, basta escalar \(a\), \(\mathbf{B}_{h}\) y \(\mathbf{H}_{h}\).
+
+\section*{5. Dinámica}
+
+Hay tres dinámicas distintas. Solo la primera está en el código. Las otras dos cambian la forma débil, no solo el lado derecho.
+
+\subsection*{5.1 Aire, operador fijo: escalar \(I(t)\)}
+
+En aire \(\sigma=0\) y \(\nv\) no depende del tiempo. La corriente entra solo en \(f\):
+\begin{equation}
+\mathbf{J}_{s}(\mathbf{x},t)=I(t)\,\hat{\jmath}(\mathbf{x}),
+\label{eq:Jt}
+\end{equation}
+con \(\hat{\jmath}\) la misma fuente ya normalizada a \(1\,\mathrm{A}\).
+La forma débil en cada instante es \(a(\mathbf{A}(t),\mathbf{v})=I(t)\,l_{1}(\mathbf{v})\).
+Como \(a\) es lineal e independiente de \(t\),
+\begin{equation}
+\boxed{\;
+\mathbf{A}(\mathbf{x},t)=I(t)\,\mathbf{A}_{1}(\mathbf{x}),
+\qquad
+\mathbf{B}(\mathbf{x},t)=I(t)\,\mathbf{B}_{1}(\mathbf{x})
+\;}
+\label{eq:escala}
+\end{equation}
+donde \((\mathbf{A}_{1},\mathbf{B}_{1})\) es la solución estática de la sección 4 con \(I=1\,\mathrm{A}\).
+
+Eso es \texttt{main\_transient.jl}: un solo \(Ka=f\), y cada cuadro del VTK multiplica el campo por \(I(t)/I_{0}\). El suavizado gaussiano de \(I(t)\) no entra en la forma débil; solo fabrica la escala. Una senoide, un escalón o una tabla producen el mismo \(\mathbf{B}_{1}\). Cambia el número por el que se multiplica.
+
+Esto vale mientras el campo alcance el régimen de \eqref{eq:magnetostatica} mucho antes de que \(I(t)\) cambie. A \(1\,\mathrm{Hz}\), en aire y en \(10\,\mathrm{cm}\), se cumple de sobra: no hay onda dentro del dominio y no hay conductor donde pueda circular una corriente inducida.
+
+\subsection*{5.2 Conductor: la forma débil depende de la historia}
+
+Si el dominio contiene un conductor, Faraday ya no se puede ignorar. Con \(\mathbf{B}=\curl\mathbf{A}\) y el gauge \(\phi=0\),
+\begin{equation}
+\mathbf{E}=-\frac{\partial\mathbf{A}}{\partial t},
+\qquad
+\mathbf{J}=\mathbf{J}_{s}+\sigma\mathbf{E}.
+\label{eq:E}
+\end{equation}
+Ampère, otra vez sin \(\partial\mathbf{D}/\partial t\), queda
+\begin{equation}
+\curl\bigl(\nv\,\curl\mathbf{A}\bigr)+\sigma\frac{\partial\mathbf{A}}{\partial t}=\mathbf{J}_{s}.
+\label{eq:eddy-fuerte}
+\end{equation}
+El mismo paso de la sección 3, con el mismo borde \(\mathbf{n}\times\mathbf{A}=\mathbf{0}\), da
+\eqbox{
+\int_{\Omega}\nv\,(\curl\mathbf{A})\cdot(\curl\mathbf{v})\dV
++\int_{\Omega}\sigma\frac{\partial\mathbf{A}}{\partial t}\cdot\mathbf{v}\dV
+=\int_{\Omega}\mathbf{v}\cdot\mathbf{J}_{s}\dV.
+}{\(**\)}
+El primer término es la misma \(K\) de \eqref{eq:K}. El segundo es nuevo: una masa solo donde \(\sigma>0\),
+\begin{equation}
+M_{ij}=\int_{\Omega}\sigma\,\boldsymbol{\varphi}_{j}\cdot\boldsymbol{\varphi}_{i}\dV.
+\label{eq:M}
+\end{equation}
+En aire, \(\sigma=0\) y esa integral no aporta. El sistema semi-discreto es
+\begin{equation}
+M\frac{\mathrm{d}a}{\mathrm{d}t}+Ka=f(t).
+\label{eq:ode}
+\end{equation}
+Ya no basta calcular \(\mathbf{A}_{1}\) y escalar. \(a(t)\) depende de \(a\) en instantes anteriores: una corriente que se apaga deja campo remanente mientras las corrientes de Foucault se disipan.
+
+Euler implícito, \(\mathrm{d}a/\mathrm{d}t\approx(a^{n+1}-a^{n})/\Delta t\), convierte \eqref{eq:ode} en un sistema del mismo tipo que \eqref{eq:sistema}, reensamblado en el lado izquierdo:
+\begin{equation}
+\Bigl(\frac{M}{\Delta t}+K\Bigr)a^{n+1}
+=\frac{M}{\Delta t}\,a^{n}+f^{n+1}.
+\label{eq:euler}
+\end{equation}
+\(K\) se ensambla una vez. Cambia el lado derecho, y \(M/\Delta t\) se suma a \(K\).
+
+\subsection*{5.3 Onda completa}
+
+Si se restituye \(\partial\mathbf{D}/\partial t\) y se mantiene \(\mathbf{E}=-\partial\mathbf{A}/\partial t\), la forma fuerte gana un término de segundo orden,
+\begin{equation}
+\curl\bigl(\nv\,\curl\mathbf{A}\bigr)
++\sigma\frac{\partial\mathbf{A}}{\partial t}
++\varepsilon_{0}\frac{\partial^{2}\mathbf{A}}{\partial t^{2}}
+=\mathbf{J}_{s},
+\label{eq:onda}
+\end{equation}
+y la forma débil, el término
+\(\int\varepsilon_{0}\,(\partial^{2}\mathbf{A}/\partial t^{2})\cdot\mathbf{v}\,\mathrm{d}\Omega\).
+Esa \(\varepsilon_{0}\) sí es la permitividad. A \(1\,\mathrm{Hz}\) en este banco es irrelevante frente a \(K\). Entra cuando el tamaño del dominio deja de ser despreciable frente a \(c/f\).
+
+\section*{6. Mapa}
+
+\begin{center}
+\renewcommand{\arraystretch}{1.35}
+\begin{tabular}{@{}llll@{}}
+\toprule
+Régimen & Forma débil & Sistema & En Kuntur \\
+\midrule
+Estática & \((\ast)\) con \(\mathbf{J}_{s}\) fijo & \(Ka=f\) & \texttt{main.jl} \\
+Aire, \(I(t)\) & \((\ast)\) con \(\mathbf{J}_{s}=I(t)\hat{\jmath}\) & \(a(t)=I(t)\,a_{1}\) & \texttt{main\_transient.jl} \\
+Foucault & \((\ast\ast)\) & \(M a'+Ka=f(t)\) & no está \\
+Onda & \((\ast\ast)\) más \(\varepsilon_{0}\partial_{tt}\) & \(M_{2}a''+Ma'+Ka=f\) & no está \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\end{document}
